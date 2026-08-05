@@ -1,0 +1,6 @@
+{
+  "name": "Ghar Se Ghar Tak",
+  "description": "A trust-focused marketplace for home-based artisans selling clothing, handmade jewellery, perfumes, and gift hampers with safe escrow protection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
