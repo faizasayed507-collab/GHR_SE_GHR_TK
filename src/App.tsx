@@ -19,7 +19,7 @@ import { ArtisanChatModal } from './components/ArtisanChatModal';
 import { SellerDashboardShell } from './components/SellerDashboard/SellerDashboardShell';
 import { AuthModal } from './components/AuthModal';
 import { AuthScreen } from './components/AuthScreen';
-import AdminPanel from './components/SellerDashboard/AdminPanel';
+import { AdminPanel } from './components/SellerDashboard/AdminPanel';
 import { Footer } from './components/Footer';
 import { Store, LogOut, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
