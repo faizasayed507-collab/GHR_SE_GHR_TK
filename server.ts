@@ -7,7 +7,7 @@ import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 import cors from "cors";
 
-// Utility helper to clean environment variables (removing surrounding quotes & whitespace)
+// Utility helper to clean environment variables
 function getCleanEnv(key: string, fallback = ""): string {
   const val = process.env[key] || fallback;
   return val.replace(/^["']|["']$/g, "").trim();
@@ -16,27 +16,28 @@ function getCleanEnv(key: string, fallback = ""): string {
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
-// Enable CORS for cross-origin requests from Vite frontend
 app.use(cors());
 app.use(express.json());
 
-// Log environment startup status
-const resendApiKey = getCleanEnv("SMTP_PASS");
-console.log("Resend Key Present:", Boolean(resendApiKey));
+// Gmail Credentials Check Log
+const gmailUser = getCleanEnv("EMAIL_USER");
+const gmailPass = getCleanEnv("EMAIL_PASS");
+console.log("Gmail Config Present:", Boolean(gmailUser && gmailPass));
 
 // In-memory OTP storage
-// Key: email (lowercase), Value: { code, expiresAt, lastSentAt }
 const otpStore = new Map<string, { code: string; expiresAt: number; lastSentAt: number }>();
 
-// Helper to send email via Resend API or Nodemailer SMTP with graceful error handling
-async function sendEmailOtp(email: string, code: string) {
-  const apiKey = getCleanEnv("SMTP_PASS");
-  let rawFrom = getCleanEnv("SMTP_FROM", "GHR_SE_GHR_TK <onboarding@resend.dev>");
-  if (!rawFrom.includes("<")) {
-    rawFrom = `GHR_SE_GHR_TK <${rawFrom}>`;
-  }
-  const smtpFrom = rawFrom;
+// Nodemailer Gmail Transporter Setup
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: gmailUser,
+    pass: gmailPass, // Google 16-digit App Password
+  },
+});
 
+// Helper to send email via Gmail SMTP
+async function sendEmailOtp(email: string, code: string) {
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #E2D9D0; border-radius: 10px; background-color: #FAF6F2;">
       <h2 style="color: #4A3F35; margin-bottom: 10px; text-align: center;">Ghar Se Ghar Tak (GHR_SE_GHR_TK)</h2>
@@ -49,77 +50,27 @@ async function sendEmailOtp(email: string, code: string) {
     </div>
   `;
 
-  if (!apiKey) {
-    return { success: false, error: "SMTP_PASS or Resend API key is missing in environment variables (.env)." };
+  if (!gmailUser || !gmailPass) {
+    return { 
+      success: false, 
+      error: "EMAIL_USER or EMAIL_PASS missing in environment variables (.env)." 
+    };
   }
-
-  let resendErrorMessage = "";
-
-  // 1. Direct Resend REST API (Primary Email Dispatch)
-  if (apiKey.startsWith("re_")) {
-    try {
-      const resendRes = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: smtpFrom,
-          to: [email],
-          subject: `Your Ghar Se Ghar Tak Seller Verification Code: ${code}`,
-          html: htmlContent,
-        }),
-      });
-
-      const resendData = await resendRes.json();
-      if (resendRes.ok && resendData.id) {
-        console.log(`[RESEND API SUCCESS] Dispatched OTP email to ${email}. ID: ${resendData.id}`);
-        return { success: true, method: "resend_api" };
-      } else {
-        resendErrorMessage = resendData.message || resendData.name || resendData.error || "Resend API rejected the credentials or email format.";
-        console.error(`[RESEND API ERROR] ${resendErrorMessage}`);
-      }
-    } catch (resendErr: any) {
-      resendErrorMessage = resendErr?.message || "Failed to reach Resend API";
-      console.error(`[RESEND API EXCEPTION]`, resendErrorMessage);
-    }
-  }
-
-  // 2. Nodemailer SMTP Fallback
-  const smtpHost = getCleanEnv("SMTP_HOST", "smtp.resend.com");
-  const smtpPort = Number(getCleanEnv("SMTP_PORT", "465"));
-  const smtpUser = getCleanEnv("SMTP_USER", "resend");
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: apiKey,
-      },
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
-
     await transporter.sendMail({
-      from: smtpFrom,
-      to: email,
+      from: `"Ghar Se Ghar Tak" <${gmailUser}>`,
+      to: email, // Dynamic user email address
       subject: `Your Ghar Se Ghar Tak Seller Verification Code: ${code}`,
       html: htmlContent,
     });
-    console.log(`[SMTP SUCCESS] Dispatched OTP email to ${email}`);
-    return { success: true, method: "smtp" };
+
+    console.log(`[GMAIL SMTP SUCCESS] Dispatched OTP email to ${email}`);
+    return { success: true, method: "gmail_smtp" };
   } catch (smtpErr: any) {
-    const smtpErrorMessage = smtpErr?.message || "SMTP authentication failed";
-    console.error(`[SMTP ERROR] ${smtpErrorMessage}`);
-    return { 
-      success: false, 
-      error: resendErrorMessage ? `${resendErrorMessage} | SMTP: ${smtpErrorMessage}` : smtpErrorMessage 
-    };
+    const smtpErrorMessage = smtpErr?.message || "Gmail SMTP authentication failed";
+    console.error(`[GMAIL SMTP ERROR] ${smtpErrorMessage}`);
+    return { success: false, error: smtpErrorMessage };
   }
 }
 
