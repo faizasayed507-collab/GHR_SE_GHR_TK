@@ -20,6 +20,8 @@ import {
   Home,
   BadgeCheck,
   AlertCircle,
+  Eye,
+  EyeOff,
   Check
 } from 'lucide-react';
 
@@ -58,6 +60,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   // Shared Login Fields
   const [loginEmailOrPhone, setLoginEmailOrPhone] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Buyer Signup Fields
   const [buyerName, setBuyerName] = useState('');
@@ -493,13 +496,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </label>
                 <div className="relative">
                   <input
-                    type="password"
+                    type={showLoginPassword ? 'text' : 'password'}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs sm:text-sm text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
+                    className="w-full pl-10 pr-10 py-2.5 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs sm:text-sm text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
                   />
                   <Lock className="w-4 h-4 text-[#A69689] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <button
+                    type="button"
+                    onClick={() => setShowLoginPassword((prev) => !prev)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A69689] hover:text-[#4A3F35]"
+                    aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -669,13 +680,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     </label>
                     <div className="relative">
                       <input
-                        type="password"
+                        type={showBuyerPassword ? 'text' : 'password'}
                         value={buyerPassword}
                         onChange={(e) => setBuyerPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full pl-10 pr-4 py-2.5 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs sm:text-sm text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
+                        className="w-full pl-10 pr-10 py-2.5 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs sm:text-sm text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
                       />
                       <Lock className="w-4 h-4 text-[#A69689] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <button
+                        type="button"
+                        onClick={() => setShowBuyerPassword((prev) => !prev)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A69689] hover:text-[#4A3F35]"
+                        aria-label={showBuyerPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showBuyerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                   </div>
 
@@ -845,13 +864,23 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                       <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
                         Password
                       </label>
-                      <input
-                        type="password"
-                        value={sellerPassword}
-                        onChange={(e) => setSellerPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showSellerPassword ? 'text' : 'password'}
+                          value={sellerPassword}
+                          onChange={(e) => setSellerPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full pr-10 px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSellerPassword((prev) => !prev)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A69689] hover:text-[#4A3F35]"
+                          aria-label={showSellerPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showSellerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
