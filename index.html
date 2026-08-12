@@ -12,6 +12,14 @@
   </head>
   <body class="bg-[#FFF9F5] text-[#4A3F35] font-sans antialiased">
     <div id="root"></div>
+    <!-- Provide a minimal global fallback to avoid Uncaught ReferenceError for showSellerPassword
+         if some component or inline script references it before React mounts. This ensures the
+         identifier exists and can be toggled without crashing. -->
+    <script>
+      // global fallback (kept minimal). Components should still declare state internally.
+      window.showSellerPassword = false;
+      window.setShowSellerPassword = function (val) { window.showSellerPassword = !!val; };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
