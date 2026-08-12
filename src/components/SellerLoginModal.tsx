@@ -15,6 +15,11 @@ export const SellerLoginModal: React.FC<SellerLoginModalProps> = ({
   const [phoneOrEmail, setPhoneOrEmail] = useState('0300-1234567');
   const [password, setPassword] = useState('password123');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Safe Fallback for legacy builds
+  const showSellerPassword = showPassword; 
+  const setShowSellerPassword = setShowPassword;
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
