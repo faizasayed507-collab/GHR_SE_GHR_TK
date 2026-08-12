@@ -74,7 +74,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [sellerPhone, setSellerPhone] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
   const [sellerPassword, setSellerPassword] = useState('');
-  const [showSellerPassword, setShowSellerPassword] = useState(false);
+  // Toggle visibility for seller password input
+  const [showSellerPassword, setShowSellerPassword] = useState<boolean>(false);
   const [sellerBusinessName, setSellerBusinessName] = useState('');
   const [sellerBio, setSellerBio] = useState('');
 
