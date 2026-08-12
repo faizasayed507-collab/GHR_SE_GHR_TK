@@ -66,9 +66,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [buyerName, setBuyerName] = useState('');
   const [buyerEmailOrPhone, setBuyerEmailOrPhone] = useState('');
   const [buyerPassword, setBuyerPassword] = useState('');
+  const [showBuyerPassword, setShowBuyerPassword] = useState(false); // FIXED: Added missing state
   const [buyerAddress, setBuyerAddress] = useState('');
 
-  // Seller Signup Fields (Verification Focused, Home Business Language)
+  // Seller Signup Fields
   const [sellerFullName, setSellerFullName] = useState('');
   const [sellerCnic, setSellerCnic] = useState('');
   const [sellerCnicImage, setSellerCnicImage] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [sellerPhone, setSellerPhone] = useState('');
   const [sellerEmail, setSellerEmail] = useState('');
   const [sellerPassword, setSellerPassword] = useState('');
+  const [showSellerPassword, setShowSellerPassword] = useState(false); // FIXED: Added missing state
   const [sellerBusinessName, setSellerBusinessName] = useState('');
   const [sellerBio, setSellerBio] = useState('');
 
@@ -217,7 +219,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setErrorMessage('');
 
     try {
-      // 1. If Supabase is configured, attempt Supabase Auth OTP
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.auth.signInWithOtp({
           email: sellerEmail.trim(),
@@ -227,7 +228,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         }
       }
 
-      // 2. Call backend Express server API
       const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -294,7 +294,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     sendRealEmailOtp();
   };
 
-  // Verify Real Email OTP Code & Save Seller Account with "Pending Admin Review"
+  // Verify Real Email OTP Code
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpTimer <= 0) {
@@ -311,7 +311,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setErrorMessage('');
 
     try {
-      // 1. Supabase OTP verification attempt if configured
       if (isSupabaseConfigured && supabase) {
         const { error } = await supabase.auth.verifyOtp({
           email: sellerEmail.trim(),
@@ -323,7 +322,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         }
       }
 
-      // 2. Call backend Express server API to verify
       const response = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -336,7 +334,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         throw new Error(data.error || 'Invalid verification code. Please check your inbox and try again.');
       }
 
-      // CNIC verification status set to "Pending Admin Review"
       const verificationStatus: VerificationStatus = 'Pending Admin Review';
 
       const newSeller: UserAccount = {
@@ -725,7 +722,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 </form>
               )}
 
-              {/* STEP 2: SELLER DETAILS FORM (Verification-Focused, Home Business Language) */}
+              {/* STEP 2: SELLER DETAILS FORM */}
               {signupStep === 'details' && selectedRole === 'seller' && (
                 <form onSubmit={handleSellerFormSubmit} className="space-y-4">
                   <div className="flex items-center justify-between border-b border-[#F2E8E1] pb-2">
@@ -746,7 +743,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     </button>
                   </div>
 
-                  {/* Personal Identity Fields */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
@@ -776,7 +772,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                     </div>
                   </div>
 
-                  {/* CNIC Front Photo Upload */}
+                  {/* CNIC Upload Section */}
                   <div className="p-3 bg-[#FFF9F5] border border-[#D4AF37]/30 rounded-2xl">
                     <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1 flex items-center justify-between">
                       <span>CNIC Front Image Upload</span>
@@ -785,35 +781,55 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
                     {sellerCnicImage ? (
                       <div className="relative rounded-xl overflow-hidden border border-[#D4AF37] h-28 bg-black/5 flex items-center justify-center">
-                        <img
-                          src={sellerCnicImage}
-                          alt="CNIC Front"
-                          className="h-full w-auto object-contain"
-                        />
+                        <img src={sellerCnicImage} alt="CNIC Front" className="h-full object-contain" />
                         <button
                           type="button"
                           onClick={() => setSellerCnicImage(null)}
-                          className="absolute top-2 right-2 bg-rose-600 text-white text-[10px] px-2 py-1 rounded-md font-bold shadow"
+                          className="absolute top-2 right-2 bg-rose-600 text-white p-1 rounded-full text-xs font-bold shadow hover:bg-rose-700"
                         >
-                          Remove
+                          ✕
                         </button>
                       </div>
                     ) : (
-                      <label className="border-2 border-dashed border-[#D4AF37]/50 hover:border-[#D4AF37] bg-white rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer transition-colors text-center">
-                        <Upload className="w-5 h-5 text-[#D4AF37] mb-1" />
-                        <span className="text-xs font-bold text-[#4A3F35]">Upload Front Photo of CNIC</span>
-                        <span className="text-[10px] text-[#8C7B6C] mt-0.5">JPG, PNG or WEBP (Max 5MB)</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleCnicImageUpload}
-                          className="hidden"
-                        />
+                      <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-[#D4AF37]/50 rounded-xl cursor-pointer hover:bg-[#FBF7F4] transition-colors">
+                        <Upload className="w-6 h-6 text-[#D4AF37] mb-1" />
+                        <span className="text-xs text-[#8C7B6C] font-medium">Click to upload CNIC Front</span>
+                        <input type="file" accept="image/*" onChange={handleCnicImageUpload} className="hidden" />
                       </label>
                     )}
                   </div>
 
-                  {/* Contact & Location Fields */}
+                  {/* Business & Contact info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
+                        Home Business Name
+                      </label>
+                      <input
+                        type="text"
+                        value={sellerBusinessName}
+                        onChange={(e) => setSellerBusinessName(e.target.value)}
+                        placeholder="e.g. Multani Dhaaga Crafts"
+                        className="w-full px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
+                        City
+                      </label>
+                      <select
+                        value={sellerCity}
+                        onChange={(e) => setSellerCity(e.target.value)}
+                        className="w-full px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
+                      >
+                        {PAKISTAN_CITIES.map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
@@ -830,199 +846,110 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
                     <div>
                       <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
-                        City
-                      </label>
-                      <select
-                        value={sellerCity}
-                        onChange={(e) => setSellerCity(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
-                      >
-                        {PAKISTAN_CITIES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
                         Email Address
                       </label>
                       <input
                         type="email"
                         value={sellerEmail}
                         onChange={(e) => setSellerEmail(e.target.value)}
-                        placeholder="artisan@home.pk"
+                        placeholder="seller@domain.com"
                         className="w-full px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
                       />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
-                        Password
-                      </label>
-                      <div className="relative">
-                        <input
-                          type={showSellerPassword ? 'text' : 'password'}
-                          value={sellerPassword}
-                          onChange={(e) => setSellerPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full pr-10 px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSellerPassword((prev) => !prev)}
-                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A69689] hover:text-[#4A3F35]"
-                          aria-label={showSellerPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showSellerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
-                      Home Address (House/Street, Area)
+                      Password
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSellerPassword ? 'text' : 'password'}
+                        value={sellerPassword}
+                        onChange={(e) => setSellerPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full pl-10 pr-10 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
+                      />
+                      <Lock className="w-4 h-4 text-[#A69689] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <button
+                        type="button"
+                        onClick={() => setShowSellerPassword((prev) => !prev)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#A69689] hover:text-[#4A3F35]"
+                        aria-label={showSellerPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showSellerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
+                      Complete Address
                     </label>
                     <input
                       type="text"
                       value={sellerAddress}
                       onChange={(e) => setSellerAddress(e.target.value)}
-                      placeholder="e.g. House 14, St 3, Cantonment, Multan"
+                      placeholder="House No., Street, Sector/Area, City"
                       className="w-full px-3 py-2 bg-[#FBF7F4] border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
                     />
                   </div>
 
-                  {/* Home Business Details */}
-                  <div className="p-3.5 bg-[#FFF9F5] border border-[#D4AF37]/30 rounded-2xl space-y-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
-                        Home Business Name
-                      </label>
-                      <input
-                        type="text"
-                        value={sellerBusinessName}
-                        onChange={(e) => setSellerBusinessName(e.target.value)}
-                        placeholder="e.g. Multani Dhaaga Crafts"
-                        className="w-full px-3 py-2 bg-white border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#4A3F35] uppercase tracking-wider mb-1">
-                        Short Bio (What do you make from home?)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={sellerBio}
-                        onChange={(e) => setSellerBio(e.target.value)}
-                        placeholder="e.g. Handcrafted traditional Gota Pati embroidery work on cotton & silk from my home courtyard."
-                        className="w-full px-3 py-2 bg-white border border-[#F2E8E1] rounded-xl text-xs text-[#4A3F35] focus:outline-none focus:border-[#D4AF37]"
-                      />
-                    </div>
-                  </div>
-
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="w-full py-3 bg-[#4A3F35] hover:bg-[#382F27] text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 mt-2"
                   >
-                    <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-                    <span>Proceed to OTP Verification</span>
+                    <Mail className="w-4 h-4 text-[#D4AF37]" />
+                    <span>{isSubmitting ? 'Sending Code...' : 'Verify Email & Continue'}</span>
                   </button>
                 </form>
               )}
 
-              {/* STEP 3: OTP VERIFICATION (FOR SELLERS) */}
+              {/* STEP 3: OTP VERIFICATION STEP */}
               {signupStep === 'otp' && (
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <div className="text-center">
-                    <div className="inline-flex items-center justify-center p-3 bg-[#D4AF37]/15 rounded-2xl mb-2 text-[#4A3F35]">
-                      <Mail className="w-6 h-6 text-[#D4AF37]" />
-                    </div>
-                    <h3 className="text-lg font-serif font-bold text-[#4A3F35]">
-                      Email Security OTP Verification
-                    </h3>
-                    <p className="text-xs text-[#8C7B6C] mt-1 max-w-xs mx-auto">
-                      A real 6-digit verification code has been dispatched to <span className="font-bold text-[#4A3F35]">{sellerEmail}</span>
-                    </p>
-
-                    {/* Real Email OTP Status Banner */}
-                    <div className="mt-3 p-3 bg-[#FFF9F5] border border-[#D4AF37]/30 rounded-2xl text-left text-xs text-[#4A3F35] space-y-1">
-                      <div className="flex items-center gap-2 font-bold text-[#D4AF37]">
-                        <Check className="w-4 h-4" />
-                        <span>Code Dispatched to Inbox</span>
-                      </div>
-                      <p className="text-[11px] text-[#8C7B6C]">
-                        Please open your email inbox (and check spam/junk) to retrieve your 6-digit verification code.
-                      </p>
-                    </div>
+                <form onSubmit={handleVerifyOtp} className="space-y-4 text-center">
+                  <div className="p-4 bg-[#FFF9F5] border border-[#D4AF37]/30 rounded-2xl">
+                    <Mail className="w-8 h-8 text-[#D4AF37] mx-auto mb-2" />
+                    <h3 className="font-serif font-bold text-[#4A3F35] text-base">Enter Verification Code</h3>
+                    <p className="text-xs text-[#8C7B6C] mt-1">{otpSentMessage || `Code sent to ${sellerEmail}`}</p>
                   </div>
 
                   <div>
-                    <label className="block text-center text-xs font-bold text-[#4A3F35] uppercase tracking-wider mb-2">
-                      Enter Received 6-Digit Code *
-                    </label>
                     <input
                       type="text"
-                      maxLength={6}
                       value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                       placeholder="• • • • • •"
-                      className="w-full text-center tracking-[0.5em] text-xl font-mono py-3 bg-[#FBF7F4] border-2 border-[#D4AF37] rounded-xl text-[#4A3F35] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50"
+                      maxLength={6}
+                      className="w-48 mx-auto text-center tracking-[0.5em] text-xl font-bold py-2 bg-[#FBF7F4] border border-[#D4AF37] rounded-xl text-[#4A3F35] focus:outline-none"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-[#8C7B6C] pt-1">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <Clock className="w-4 h-4 text-[#D4AF37]" />
-                      <span>Code expires in: <strong className="text-[#4A3F35]">{formatTimer(otpTimer)}</strong></span>
-                    </div>
-
+                  <div className="flex items-center justify-between text-xs text-[#8C7B6C] px-4">
+                    <span>Expires in: {formatTimer(otpTimer)}</span>
                     <button
                       type="button"
                       disabled={isResendDisabled}
                       onClick={sendRealEmailOtp}
-                      className={`flex items-center gap-1 font-bold ${
-                        isResendDisabled
-                          ? 'text-[#A69689] cursor-not-allowed'
-                          : 'text-[#D4AF37] hover:underline'
-                      }`}
+                      className="text-[#D4AF37] font-bold disabled:opacity-50 hover:underline"
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>{isResendDisabled ? `Resend (${resendCooldown}s)` : 'Resend Code'}</span>
+                      Resend Code {resendCooldown > 0 && `(${resendCooldown}s)`}
                     </button>
                   </div>
 
                   <button
                     type="submit"
-                    disabled={isSubmitting || otpCode.length < 6}
-                    className="w-full py-3 bg-[#4A3F35] hover:bg-[#382F27] disabled:bg-[#A69689] text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 mt-2"
+                    disabled={isSubmitting}
+                    className="w-full py-3 bg-[#4A3F35] hover:bg-[#382F27] text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
                   >
-                    <BadgeCheck className="w-4 h-4 text-[#D4AF37]" />
-                    <span>{isSubmitting ? 'Verifying Code...' : 'Verify OTP & Activate Home Business'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setSignupStep('details')}
-                    className="w-full text-center text-xs text-[#8C7B6C] hover:text-[#4A3F35] underline"
-                  >
-                    Edit Email Address / Details
+                    <CheckCircle2 className="w-4 h-4 text-[#D4AF37]" />
+                    <span>{isSubmitting ? 'Verifying...' : 'Complete & Submit Registration'}</span>
                   </button>
                 </form>
               )}
             </div>
           )}
-        </div>
-
-        {/* Security badge footer */}
-        <div className="mt-6 text-center text-xs text-[#8C7B6C] flex items-center justify-center gap-1.5">
-          <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
-          <span>Protected by Automated Bank Vault Escrow & CNIC Identity Screening</span>
         </div>
       </div>
     </div>
