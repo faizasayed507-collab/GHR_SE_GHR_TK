@@ -82,15 +82,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Stateless token: email|code|expiresAt, signed so it can't be tampered with client-side
     const payload = `${cleanEmail}|${code}|${expiresAt}`;
     const token = signToken(payload);
-
-    return res.status(200).json({
-      success: true,
-      message: `Verification code sent to ${cleanEmail}`,
-      method: emailResult.method,
-      token,
-    });
-  } catch (error: any) {
-    console.error('Error in /api/send-otp:', error);
-    return res.status(500).json({ success: false, error: error.message || 'Failed to send verification code.' });
-  }
-}
