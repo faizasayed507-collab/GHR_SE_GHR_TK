@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 
 type VercelRequest = any;
 type VercelResponse = any;
@@ -10,6 +11,7 @@ function getCleanEnv(key: string, fallback = ''): string {
 
 const gmailUser = getCleanEnv('EMAIL_USER');
 const gmailPass = getCleanEnv('EMAIL_PASS');
+const otpSecret = getCleanEnv('OTP_SECRET', 'fallback-dev-secret-change-me');
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -19,12 +21,11 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// NOTE: In-memory storage resets between cold starts on serverless.
-// For production reliability, replace this with a persistent store
-// (e.g. Supabase table, Redis, Vercel KV).
-const otpStore: Map<string, { code: string; expiresAt: number; lastSentAt: number }> =
-  (global as any).__otpStore || new Map();
-(global as any).__otpStore = otpStore;
+function signToken(payload: string): string {
+  const hmac = crypto.createHmac('sha256', otpSecret).update(payload).digest('hex');
+  const encodedPayload = Buffer.from(payload).toString('base64url');
+  return `${encodedPayload}.${hmac}`;
+}
 
 async function sendEmailOtp(email: string, code: string) {
   const htmlContent = `
@@ -69,18 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const cleanEmail = email.trim().toLowerCase();
 
-    const existing = otpStore.get(cleanEmail);
-    if (existing && Date.now() - existing.lastSentAt < 60000) {
-      const waitSecs = Math.ceil((60000 - (Date.now() - existing.lastSentAt)) / 1000);
-      return res.status(429).json({
-        success: false,
-        error: `Please wait ${waitSecs} seconds before requesting a new verification code.`,
-      });
-    }
-
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000;
-    const lastSentAt = Date.now();
 
     const emailResult = await sendEmailOtp(cleanEmail, code);
 
@@ -88,12 +79,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ success: false, error: emailResult.error || 'Failed to deliver verification email.' });
     }
 
-    otpStore.set(cleanEmail, { code, expiresAt, lastSentAt });
+    // Stateless token: email|code|expiresAt, signed so it can't be tampered with client-side
+    const payload = `${cleanEmail}|${code}|${expiresAt}`;
+    const token = signToken(payload);
 
     return res.status(200).json({
       success: true,
       message: `Verification code sent to ${cleanEmail}`,
       method: emailResult.method,
+      token,
     });
   } catch (error: any) {
     console.error('Error in /api/send-otp:', error);

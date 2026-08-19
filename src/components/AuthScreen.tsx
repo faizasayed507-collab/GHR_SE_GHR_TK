@@ -85,6 +85,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [resendCooldown, setResendCooldown] = useState(30);
   const [isResendDisabled, setIsResendDisabled] = useState(true);
   const [otpSentMessage, setOtpSentMessage] = useState('');
+  const [otpToken, setOtpToken] = useState('');
 
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -216,6 +217,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       }
 
       setOtpSentMessage(`Verification code sent to ${sellerEmail.trim()}`);
+      setOtpToken(data.token || '');
 
       setOtpTimer(300);
       setResendCooldown(30);
@@ -300,7 +302,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       const response = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: sellerEmail.trim(), code: otpCode.trim() }),
+        body: JSON.stringify({ email: sellerEmail.trim(), code: otpCode.trim(), token: otpToken }),
       });
 
       const data = await response.json();
