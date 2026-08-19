@@ -82,3 +82,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Stateless token: email|code|expiresAt, signed so it can't be tampered with client-side
     const payload = `${cleanEmail}|${code}|${expiresAt}`;
     const token = signToken(payload);
+
+    return res.status(200).json({
+      success: true,
+      message: 'OTP sent successfully',
+      token,
+      expiresAt,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Internal server error',
+    });
+  }
+}
