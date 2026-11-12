@@ -414,13 +414,7 @@ export default function App() {
 
               {/* Logged in Studio info + Admin Portal + Exit / Logout button */}
               <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowAdminPanel(true)}
-                  className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[#D4AF37] text-xs font-bold rounded-xl border border-[#D4AF37]/40 transition-all flex items-center gap-1.5"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                  <span>Admin Panel</span>
-                </button>
+               
 
                 <div className="flex items-center gap-2.5 px-3 py-1 bg-white/10 rounded-xl border border-white/15">
                   <img
@@ -493,7 +487,7 @@ export default function App() {
             currentUser={currentUser}
             onOpenAuthModal={(mode) => handleOpenAuth(mode, 'buyer')}
             onLogout={handleLogout}
-            onOpenAdminPanel={() => setShowAdminPanel(true)}
+        
           />
 
           {/* Buyer Logged In Welcome Greeting Bar */}

@@ -12,7 +12,7 @@ interface NavbarProps {
   currentUser: UserAccount | null;
   onOpenAuthModal: (mode?: 'login' | 'signup') => void;
   onLogout: () => void;
-  onOpenAdminPanel?: () => void;
+
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -25,7 +25,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentUser,
   onOpenAuthModal,
   onLogout,
-  onOpenAdminPanel,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#F2E8E1] shadow-xs">
@@ -93,16 +92,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Controls: User Auth Status & Cart */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             {/* Admin CNIC Portal Trigger */}
-            {onOpenAdminPanel && (
-              <button
-                onClick={onOpenAdminPanel}
-                className="px-2.5 py-1.5 bg-[#4A3F35] hover:bg-[#382F27] text-[#D4AF37] border border-[#D4AF37]/40 text-xs font-bold rounded-full transition-all shadow-xs flex items-center gap-1.5"
-                title="Admin CNIC Verification Review Portal"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-[#D4AF37]" />
-                <span className="hidden lg:inline">Admin CNIC Review</span>
-              </button>
-            )}
+           
 
             {/* User Auth Info / Account Action */}
             {currentUser ? (
