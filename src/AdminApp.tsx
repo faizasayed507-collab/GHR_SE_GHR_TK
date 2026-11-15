@@ -16,6 +16,7 @@ const toAccount = (p: any): UserAccount => ({
   homeBusinessName: p.home_business_name || undefined,
   shopName: p.home_business_name || undefined,
   verificationStatus: p.verification_status,
+    cnicImagePath: p.cnic_image_path || undefined,
   createdAt: p.created_at,
 });
 
@@ -135,6 +136,13 @@ export default function AdminApp() {
         sellers={[]}
         onUpdateAccountStatus={handleUpdateStatus}
         onClose={handleLogout}
+                onGetCnicUrl={async (path: string) => {
+          if (!supabase) return null;
+          const { data } = await supabase.storage
+            .from('cnic-docs')
+            .createSignedUrl(path, 300);
+          return data?.signedUrl || null;
+        }}
       />
     );
   }

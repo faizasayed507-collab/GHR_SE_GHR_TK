@@ -102,6 +102,7 @@ export interface UserAccount {
   role: UserRole;
   cnicNumber?: string;
   cnicImage?: string;
+    cnicImagePath?: string;
   address?: string;
   city?: string;
   homeBusinessName?: string;

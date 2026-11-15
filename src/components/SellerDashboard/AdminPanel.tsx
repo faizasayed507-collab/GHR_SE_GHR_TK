@@ -25,6 +25,7 @@ interface AdminPanelProps {
   sellers: Seller[];
   onUpdateAccountStatus: (accountId: string, status: VerificationStatus) => void;
   onClose?: () => void;
+    onGetCnicUrl?: (path: string) => Promise<string | null>;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -32,6 +33,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   sellers,
   onUpdateAccountStatus,
   onClose,
+  onGetCnicUrl,
 }) => {
   const sellerAccounts = accounts.filter((a) => a.role === 'seller' || a.cnicNumber);
 
@@ -198,7 +200,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="space-y-4">
             {filteredAccounts.map((acc) => {
               const currentStatus = acc.verificationStatus || 'Pending Admin Review';
-              const hasCnicImage = Boolean(acc.cnicImage);
+                            const hasCnicImage = Boolean(acc.cnicImage || acc.cnicImagePath);
 
               return (
                 <div
@@ -263,28 +265,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   {/* Middle Column: CNIC Front Image Preview Button */}
                   <div className="shrink-0 flex items-center gap-3 bg-[#FAF6F2] p-3 rounded-2xl border border-[#F2E8E1]">
                     {hasCnicImage ? (
-                      <div className="flex items-center gap-3">
-                        <div className="w-16 h-12 rounded-xl overflow-hidden bg-stone-200 border border-stone-300 shrink-0 relative group">
-                          <img
-                            src={acc.cnicImage}
-                            alt="CNIC Front"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
+                     
                         <button
-                          onClick={() =>
+                                                    onClick={async () => {
+                            let url = acc.cnicImage || '';
+                            if (!url && acc.cnicImagePath && onGetCnicUrl) {
+                              url = (await onGetCnicUrl(acc.cnicImagePath)) || '';
+                            }
+                            if (!url) {
+                              alert('Could not load CNIC photo.');
+                              return;
+                            }
                             setSelectedCnicImage({
                               name: acc.name,
                               cnic: acc.cnicNumber || 'CNIC Image',
-                              imageUrl: acc.cnicImage!,
-                            })
-                          }
+                              imageUrl: url,
+                            });
+                                                    }}
                           className="px-3 py-1.5 bg-[#4A3F35] text-white hover:bg-[#382F27] text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#D4AF37]" />
                           <span>View CNIC Photo</span>
                         </button>
-                      </div>
+                      
                     ) : (
                       <div className="text-xs text-amber-800 flex items-center gap-1.5 font-medium px-2 py-1">
                         <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />

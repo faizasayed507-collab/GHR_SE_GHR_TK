@@ -360,12 +360,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       if (!signUpData.user || !signUpData.session) {
         throw new Error('Could not create session. Please try signing in.');
       }
+      // CNIC photo upload (private bucket)
+      let cnicPath: string | null = null;
+      if (sellerCnicImage) {
+        const blob = await (await fetch(sellerCnicImage)).blob();
+        const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+        const path = `${signUpData.user.id}/cnic-front.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from('cnic-docs')
+          .upload(path, blob, { contentType: blob.type, upsert: true });
+        if (uploadError) {
+          console.warn('CNIC upload failed:', uploadError.message);
+        } else {
+          cnicPath = path;
+        }
+      }
+
 
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
           phone: sellerPhone.trim(),
           cnic_number: sellerCnic,
+                    cnic_image_path: cnicPath,
           address: sellerAddress.trim(),
           city: sellerCity,
           home_business_name: sellerBusinessName.trim(),
