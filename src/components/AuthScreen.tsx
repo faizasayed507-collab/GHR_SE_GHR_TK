@@ -90,6 +90,37 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const isStrongPassword = (pw: string) =>
+    pw.length >= 8 && /[a-z]/.test(pw) && /[A-Z]/.test(pw) && /\d/.test(pw);
+
+  const PASSWORD_HINT =
+    'Password must be at least 8 characters with a lowercase letter, an uppercase letter and a number.';
+
+  const profileToAccount = (p: any): UserAccount => ({
+    id: p.id,
+    name: p.name,
+    email: p.email || undefined,
+    phone: p.phone || undefined,
+    emailOrPhone: p.email || p.phone || '',
+    role: p.role,
+    cnicNumber: p.cnic_number || undefined,
+    address: p.address || undefined,
+    city: p.city || undefined,
+    homeBusinessName: p.home_business_name || undefined,
+    shopName: p.home_business_name || undefined,
+    bio: p.bio || undefined,
+    verificationStatus: p.verification_status,
+    phoneVerified: p.phone_verified,
+    emailVerified: p.email_verified,
+    avatar:
+      p.avatar ||
+      (p.role === 'seller'
+        ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400'
+        : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=400'),
+    createdAt: p.created_at,
+  });
+
+
   // OTP Timer effect
   useEffect(() => {
     let timer: any;
@@ -154,39 +185,54 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   // Handle Login
-  const handleLoginSubmit = (e: React.FormEvent) => {
+    const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginEmailOrPhone.trim() || !loginPassword) {
-      setErrorMessage('Please enter your Phone/Email and Password.');
+      setErrorMessage('Please enter your Email and Password.');
+      return;
+    }
+    if (!supabase) {
+      setErrorMessage('Server connection is not configured.');
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage('');
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-
-      const searchKey = loginEmailOrPhone.toLowerCase().trim();
-      const matched = existingAccounts.find(
-        (acc) =>
-          acc.emailOrPhone?.toLowerCase().trim() === searchKey ||
-          acc.email?.toLowerCase().trim() === searchKey ||
-          acc.phone?.trim() === searchKey
-      );
-
-      if (matched) {
-        if (matched.password && matched.password !== loginPassword) {
-          setErrorMessage('Incorrect password. Please verify and try again.');
-          return;
-        }
-        onAuthSuccess(matched);
-      } else {
-        setErrorMessage(
-          'No registered account found with these credentials. Please click "Sign Up" to register.'
-        );
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmailOrPhone.trim().toLowerCase(),
+        password: loginPassword,
+      });
+      if (error || !data.user) {
+        throw new Error('Incorrect email or password.');
       }
-    }, 450);
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        await supabase.auth.signOut();
+        throw new Error('Account profile not found. Please contact support.');
+      }
+      if (profile.account_status !== 'active') {
+        await supabase.auth.signOut();
+        throw new Error('This account has been suspended. Please contact support.');
+      }
+      if (profile.role === 'admin') {
+        await supabase.auth.signOut();
+        throw new Error('Admin accounts cannot sign in here.');
+      }
+
+      onAuthSuccess(profileToAccount(profile));
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Sign in failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Generate & Send Real OTP to Seller Email
@@ -195,15 +241,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setErrorMessage('');
 
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: sellerEmail.trim(),
-        });
-        if (error) {
-          console.warn('Supabase Auth OTP warning:', error.message);
-        }
-      }
-
       const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -255,8 +292,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       setErrorMessage('Please enter a valid Email Address.');
       return;
     }
-    if (!sellerPassword || sellerPassword.length < 6) {
-      setErrorMessage('Please choose a password at least 6 characters long.');
+        if (!isStrongPassword(sellerPassword)) {
+      setErrorMessage(PASSWORD_HINT);
       return;
     }
     if (!sellerBusinessName.trim()) {
@@ -288,16 +325,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     setErrorMessage('');
 
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.verifyOtp({
-          email: sellerEmail.trim(),
-          token: otpCode.trim(),
-          type: 'email',
-        });
-        if (error) {
-          console.warn('Supabase verifyOtp note:', error.message);
-        }
-      }
 
       const response = await fetch('/api/verify-otp', {
         method: 'POST',
@@ -311,32 +338,57 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         throw new Error(data.error || 'Invalid verification code. Please check your inbox and try again.');
       }
 
-      const verificationStatus: VerificationStatus = 'Pending Admin Review';
+            if (!supabase) {
+        throw new Error('Server connection is not configured.');
+      }
 
-      const newSeller: UserAccount = {
-        id: 'usr_seller_' + Date.now(),
-        name: sellerFullName.trim(),
-        email: sellerEmail.trim(),
-        phone: sellerPhone.trim(),
-        emailOrPhone: sellerEmail.trim() || sellerPhone.trim(),
+      const email = sellerEmail.trim().toLowerCase();
+
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
         password: sellerPassword,
-        role: 'seller',
-        cnicNumber: sellerCnic,
-        cnicImage: sellerCnicImage || undefined,
-        address: sellerAddress.trim(),
-        city: sellerCity,
-        homeBusinessName: sellerBusinessName.trim(),
-        shopName: sellerBusinessName.trim(),
-        bio: sellerBio.trim() || `Handcrafted creations by ${sellerFullName} from home.`,
-        verificationStatus: verificationStatus,
-        phoneVerified: true,
-        emailVerified: true,
-        avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400',
-        createdAt: new Date().toISOString(),
-      };
+        options: { data: { name: sellerFullName.trim(), role: 'seller' } },
+      });
 
-      onAuthSuccess(newSeller);
-    } catch (err: any) {
+      if (signUpError) {
+        throw new Error(
+          signUpError.message.toLowerCase().includes('already')
+            ? 'This email is already registered. Please sign in.'
+            : signUpError.message
+        );
+      }
+      if (!signUpData.user || !signUpData.session) {
+        throw new Error('Could not create session. Please try signing in.');
+      }
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          phone: sellerPhone.trim(),
+          cnic_number: sellerCnic,
+          address: sellerAddress.trim(),
+          city: sellerCity,
+          home_business_name: sellerBusinessName.trim(),
+          bio: sellerBio.trim() || `Handcrafted creations by ${sellerFullName.trim()} from home.`,
+          verification_status: 'Pending Admin Review',
+          email_verified: true,
+        })
+        .eq('id', signUpData.user.id);
+      if (updateError) {
+        console.warn('Seller profile update failed:', updateError.message);
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', signUpData.user.id)
+        .single();
+      if (profileError || !profile) {
+        throw new Error('Account created but profile could not be loaded. Please sign in.');
+      }
+
+      onAuthSuccess(profileToAccount(profile)); }
+       catch (err: any) {
       setErrorMessage(err.message || 'OTP verification failed.');
     } finally {
       setIsSubmitting(false);
@@ -344,44 +396,75 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   // Handle Buyer Signup Form Submission
-  const handleBuyerSignupSubmit = (e: React.FormEvent) => {
+    const handleBuyerSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!buyerName.trim()) {
       setErrorMessage('Please enter your Full Name.');
       return;
     }
-    if (!buyerEmailOrPhone.trim()) {
-      setErrorMessage('Please enter your Email or Phone Number.');
+    if (!buyerEmailOrPhone.trim() || !buyerEmailOrPhone.includes('@')) {
+      setErrorMessage('Please enter a valid Email Address.');
       return;
     }
-    if (!buyerPassword || buyerPassword.length < 6) {
-      setErrorMessage('Please choose a password at least 6 characters long.');
+    if (!isStrongPassword(buyerPassword)) {
+      setErrorMessage(PASSWORD_HINT);
       return;
     }
     if (!buyerAddress.trim()) {
       setErrorMessage('Please enter your Delivery Address (House/Street, Area, City).');
       return;
     }
+    if (!supabase) {
+      setErrorMessage('Server connection is not configured.');
+      return;
+    }
 
     setIsSubmitting(true);
     setErrorMessage('');
 
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const email = buyerEmailOrPhone.trim().toLowerCase();
 
-      const newBuyer: UserAccount = {
-        id: 'usr_buyer_' + Date.now(),
-        name: buyerName.trim(),
-        emailOrPhone: buyerEmailOrPhone.trim(),
+      const { data, error } = await supabase.auth.signUp({
+        email,
         password: buyerPassword,
-        role: 'buyer',
-        address: buyerAddress.trim(),
-        avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=400',
-        createdAt: new Date().toISOString(),
-      };
+        options: { data: { name: buyerName.trim(), role: 'buyer' } },
+      });
 
-      onAuthSuccess(newBuyer);
-    }, 500);
+      if (error) {
+        throw new Error(
+          error.message.toLowerCase().includes('already')
+            ? 'This email is already registered. Please sign in.'
+            : error.message
+        );
+      }
+      if (!data.user || !data.session) {
+        throw new Error('Could not create session. Please try signing in.');
+      }
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ address: buyerAddress.trim() })
+        .eq('id', data.user.id);
+      if (updateError) {
+        console.warn('Profile address update failed:', updateError.message);
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+      if (profileError || !profile) {
+        throw new Error('Account created but profile could not be loaded. Please sign in.');
+      }
+
+      onAuthSuccess(profileToAccount(profile));
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Registration failed.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatTimer = (seconds: number) => {
