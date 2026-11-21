@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from './lib/supabase';
 import { UserAccount, VerificationStatus } from './types';
-import { AdminPanel } from './components/SellerDashboard/AdminPanel';
+import { AdminPanel, AdminDispute } from './components/SellerDashboard/AdminPanel';
 
 const toAccount = (p: any): UserAccount => ({
   id: p.id,
@@ -16,7 +16,7 @@ const toAccount = (p: any): UserAccount => ({
   homeBusinessName: p.home_business_name || undefined,
   shopName: p.home_business_name || undefined,
   verificationStatus: p.verification_status,
-    cnicImagePath: p.cnic_image_path || undefined,
+  cnicImagePath: p.cnic_image_path || undefined,
   createdAt: p.created_at,
 });
 
@@ -24,6 +24,7 @@ export default function AdminApp() {
   const [stage, setStage] = useState<'loading' | 'login' | 'panel'>('loading');
   const [adminId, setAdminId] = useState('');
   const [accounts, setAccounts] = useState<UserAccount[]>([]);
+  const [disputes, setDisputes] = useState<AdminDispute[]>([]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -43,6 +44,55 @@ export default function AdminApp() {
     setAccounts((data || []).map(toAccount));
   };
 
+  const loadDisputes = async () => {
+    if (!supabase) return;
+    const { data: orders, error: err } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('status', 'Disputed')
+      .order('created_at', { ascending: false });
+    if (err || !orders) {
+      setError('Could not load disputes: ' + (err?.message || ''));
+      return;
+    }
+    if (orders.length === 0) {
+      setDisputes([]);
+      return;
+    }
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('*')
+      .in('order_id', orders.map((o: any) => o.id));
+    const sellerIds = [...new Set(orders.map((o: any) => o.seller_id).filter(Boolean))];
+    const { data: sellers } = await supabase
+      .from('profiles')
+      .select('id, name, home_business_name, phone, email')
+      .in('id', sellerIds as string[]);
+    setDisputes(
+      orders.map((o: any) => {
+        const s = (sellers || []).find((x: any) => x.id === o.seller_id);
+        return {
+          id: o.id,
+          orderNumber: o.order_number,
+          date: (o.created_at || '').split('T')[0],
+          totalAmount: Number(o.total_amount),
+          paymentMethod: o.payment_method,
+          customerName: o.customer_name,
+          customerPhone: o.customer_phone,
+          customerAddress: `${o.customer_address}, ${o.customer_city}`,
+          courierName: o.courier_name || '',
+          trackingNumber: o.tracking_number || '',
+          reason: o.dispute_reason || '',
+          sellerName: s ? (s.home_business_name || s.name) : 'Unknown',
+          sellerContact: s ? (s.phone || s.email || '') : '',
+          items: (items || [])
+            .filter((i: any) => i.order_id === o.id)
+            .map((i: any) => ({ title: i.title, quantity: i.quantity })),
+        } as AdminDispute;
+      })
+    );
+  };
+
   const enterIfAdmin = async (userId: string): Promise<boolean> => {
     if (!supabase) return false;
     const { data: profile } = await supabase
@@ -53,6 +103,7 @@ export default function AdminApp() {
     if (profile && profile.role === 'admin' && profile.account_status === 'active') {
       setAdminId(userId);
       await loadSellers();
+      await loadDisputes();
       setStage('panel');
       return true;
     }
@@ -101,6 +152,7 @@ export default function AdminApp() {
   const handleLogout = async () => {
     if (supabase) await supabase.auth.signOut();
     setAccounts([]);
+    setDisputes([]);
     setPassword('');
     setStage('login');
   };
@@ -125,6 +177,19 @@ export default function AdminApp() {
     await loadSellers();
   };
 
+  const handleResolveDispute = async (orderId: string, decision: 'release' | 'refund') => {
+    if (!supabase) return;
+    const { error: err } = await supabase.rpc('admin_resolve_dispute', {
+      p_order: orderId,
+      p_decision: decision,
+    });
+    if (err) {
+      alert('Could not resolve: ' + err.message);
+      return;
+    }
+    await loadDisputes();
+  };
+
   if (stage === 'loading') {
     return <div className="min-h-screen flex items-center justify-center text-sm">Loading...</div>;
   }
@@ -134,9 +199,11 @@ export default function AdminApp() {
       <AdminPanel
         accounts={accounts}
         sellers={[]}
+        disputes={disputes}
         onUpdateAccountStatus={handleUpdateStatus}
+        onResolveDispute={handleResolveDispute}
         onClose={handleLogout}
-                onGetCnicUrl={async (path: string) => {
+        onGetCnicUrl={async (path: string) => {
           if (!supabase) return null;
           const { data } = await supabase.storage
             .from('cnic-docs')
