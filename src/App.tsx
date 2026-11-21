@@ -2,10 +2,12 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { fetchAllProducts, insertProduct, updateProductRow, deleteProductRow } from './lib/productsApi';
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Category, Product, Seller, Order, CartItem, Review, OrderStatus, UserAccount, UserRole, VerificationStatus } from './types';
-import { mockProducts, mockSellers, mockOrders } from './data/mockData';
+import { Category, Product, Seller, Order, CartItem, Review, OrderStatus, UserAccount, UserRole } from './types';
+import { supabase } from './lib/supabase';
+import { fetchAllProducts, insertProduct, updateProductRow, deleteProductRow } from './lib/productsApi';
+import { fetchMyOrders, shipOrderApi } from './lib/ordersApi';
 import { Navbar } from './components/Navbar';
 import { HeaderPills } from './components/HeaderPills';
 import { HeroBanner } from './components/HeroBanner';
@@ -15,43 +17,18 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { EscrowModal } from './components/EscrowModal';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
+import { MyOrders } from './components/MyOrders';
 import { ArtisanChatModal } from './components/ArtisanChatModal';
 import { SellerDashboardShell } from './components/SellerDashboard/SellerDashboardShell';
 import { AuthModal } from './components/AuthModal';
 import { AuthScreen } from './components/AuthScreen';
-import { AdminPanel } from './components/SellerDashboard/AdminPanel';
 import { Footer } from './components/Footer';
-import { Store, LogOut, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { LogOut, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
-const SEED_ACCOUNTS: UserAccount[] = [
-  {
-    id: 'buyer_demo',
-    name: 'Ayesha Khan',
-    emailOrPhone: 'ayesha@demo.pk',
-    role: 'buyer',
-  },
-  {
-    id: 'seller_demo',
-    name: 'Fatima Zahra',
-    emailOrPhone: '0300-1234567',
-    role: 'seller',
-    shopName: 'Multan Silk Studio',
-    city: 'Multan',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
-  },
-];
+const DEFAULT_AVATAR =
+  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80';
 
 export default function App() {
-  // Auth & Accounts State
-  const [accounts, setAccounts] = useState<UserAccount[]>(() => {
-    try {
-      const saved = localStorage.getItem('ghar_se_ghar_tak_accounts');
-      return saved ? JSON.parse(saved) : SEED_ACCOUNTS;
-    } catch (e) {
-      return SEED_ACCOUNTS;
-    }
-  });
-
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   const [authModalConfig, setAuthModalConfig] = useState<{
@@ -64,163 +41,81 @@ export default function App() {
     role: 'buyer',
   });
 
-  // Effective Active Role
-  const activeRole: UserRole = currentUser ? currentUser.role : 'buyer';
-
-  // Category & Search State
   const [selectedCategory, setSelectedCategory] = useState<Category>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Products State with localStorage persistence
-    const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [savedProductIds, setSavedProductIds] = useState<string[]>([]);
+
+  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
+  const [isEscrowModalOpen, setIsEscrowModalOpen] = useState<boolean>(false);
+  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
+  const [isMyOrdersOpen, setIsMyOrdersOpen] = useState<boolean>(false);
+  const [activeChatSeller, setActiveChatSeller] = useState<{ id: string; name: string } | null>(null);
 
   const reloadProducts = async () => {
     setProducts(await fetchAllProducts());
+  };
+
+  const reloadOrders = async () => {
+    setOrders(currentUser ? await fetchMyOrders() : []);
   };
 
   useEffect(() => {
     reloadProducts();
   }, [currentUser]);
 
-  const [sellers] = useState<Seller[]>(mockSellers);
-  const [orders, setOrders] = useState<Order[]>(mockOrders);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [savedProductIds, setSavedProductIds] = useState<string[]>(['prod-1', 'prod-2']);
-
-  // Modals state
-  const [showAdminPanel, setShowAdminPanel] = useState<boolean>(false);
-  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
-  const [isEscrowModalOpen, setIsEscrowModalOpen] = useState<boolean>(false);
-  const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
-  const [activeChatSeller, setActiveChatSeller] = useState<{ id: string; name: string } | null>(null);
-
-  const handleUpdateAccountStatus = (accountId: string, status: VerificationStatus) => {
-    const isVerified = status === 'Verified';
-
-    setAccounts((prev) =>
-      prev.map((acc) =>
-        acc.id === accountId
-          ? {
-              ...acc,
-              verificationStatus: status,
-              verified: isVerified,
-            }
-          : acc
-      )
-    );
-
-    if (currentUser && currentUser.id === accountId) {
-      setCurrentUser((prev) =>
-        prev
-          ? {
-              ...prev,
-              verificationStatus: status,
-              verified: isVerified,
-            }
-          : null
-      );
-    }
-
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.sellerId === accountId || p.seller?.id === accountId) {
-          return {
-            ...p,
-            seller: {
-              ...p.seller,
-              verified: isVerified,
-              verificationStatus: status,
-            },
-          };
-        }
-        return p;
-      })
-    );
-  };
-
-  // Sync state to localStorage
   useEffect(() => {
-    try {
-      localStorage.setItem('ghar_se_ghar_tak_accounts', JSON.stringify(accounts));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [accounts]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('ghar_se_ghar_tak_products', JSON.stringify(products));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [products]);
-
-  useEffect(() => {
-    try {
-      if (currentUser) {
-        localStorage.setItem('ghar_se_ghar_tak_user', JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem('ghar_se_ghar_tak_user');
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    reloadOrders();
   }, [currentUser]);
 
   const handleAuthSuccess = (user: UserAccount) => {
     setCurrentUser(user);
-    setAccounts((prev) => {
-      const idx = prev.findIndex(
-        (a) =>
-          a.id === user.id ||
-          a.emailOrPhone.toLowerCase().trim() === user.emailOrPhone.toLowerCase().trim()
-      );
-      if (idx >= 0) {
-        const updated = [...prev];
-        updated[idx] = { ...updated[idx], ...user };
-        return updated;
-      }
-      return [...prev, user];
-    });
   };
 
-  const currentSeller: Seller = useMemo(() => {
-    if (currentUser && currentUser.role === 'seller') {
-      return {
-        id: currentUser.id,
-        name: currentUser.name || 'Homepreneur',
-        homeBusinessName: currentUser.homeBusinessName || currentUser.shopName || `${currentUser.name}'s Home Business`,
-        shopName: currentUser.homeBusinessName || currentUser.shopName || `${currentUser.name}'s Home Business`,
-        city: currentUser.city || 'Multan',
-        avatar:
-          currentUser.avatar ||
-          'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80',
-        rating: 5.0,
-        totalSales: 0,
-        joinedYear: '2026',
-        bio: `Home-based business owned by ${currentUser.name}. Specializing in authentic handcrafted creations.`,
-        verified: currentUser.verificationStatus === 'Verified' || Boolean(currentUser.verified),
-        verificationStatus: currentUser.verificationStatus || 'Verified',
-      };
-    }
-    return mockSellers[0];
-  }, [currentUser]);
-
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (supabase) await supabase.auth.signOut();
     setCurrentUser(null);
+    setCart([]);
+    setOrders([]);
   };
 
   const handleOpenAuth = (mode: 'login' | 'signup' = 'login', role: UserRole = 'buyer') => {
-    setAuthModalConfig({
-      isOpen: true,
-      mode,
-      role,
-    });
+    setAuthModalConfig({ isOpen: true, mode, role });
   };
 
-  // Category counts
-  const categoryCounts = React.useMemo(() => {
+  const currentSeller: Seller = useMemo(() => {
+    const u = currentUser;
+    const name = u?.name || 'Homepreneur';
+    const business = u?.homeBusinessName || u?.shopName || `${name}'s Home Business`;
+    return {
+      id: u?.id || '',
+      name,
+      homeBusinessName: business,
+      shopName: business,
+      city: u?.city || '',
+      avatar: u?.avatar || DEFAULT_AVATAR,
+      rating: 0,
+      totalSales: 0,
+      joinedYear: u?.createdAt ? String(new Date(u.createdAt).getFullYear()) : '2026',
+      bio: u?.bio || `Home-based business owned by ${name}.`,
+      verified: u?.verificationStatus === 'Verified',
+      verificationStatus: u?.verificationStatus || 'Pending Admin Review',
+    };
+  }, [currentUser]);
+
+  const sellers: Seller[] = useMemo(() => {
+    const map = new Map<string, Seller>();
+    products.forEach((p) => {
+      if (p.seller && !map.has(p.seller.id)) map.set(p.seller.id, p.seller);
+    });
+    return Array.from(map.values());
+  }, [products]);
+
+  const categoryCounts = useMemo(() => {
     const counts: Record<Category, number> = {
       All: products.length,
       Clothing: 0,
@@ -237,18 +132,24 @@ export default function App() {
     return counts;
   }, [products]);
 
-  // Cart operations
   const handleAddToCart = (product: Product, quantity: number = 1) => {
     setCart((prevCart) => {
       const existingIndex = prevCart.findIndex((item) => item.product.id === product.id);
       if (existingIndex > -1) {
         const updated = [...prevCart];
-        updated[existingIndex].quantity += quantity;
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: updated[existingIndex].quantity + quantity,
+        };
         return updated;
       }
       return [...prevCart, { product, quantity }];
     });
     setIsCartOpen(true);
+  };
+
+  const handleRemoveFromCart = (productId: string) => {
+    setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
   const handleUpdateQuantity = (productId: string, quantity: number) => {
@@ -261,10 +162,6 @@ export default function App() {
         item.product.id === productId ? { ...item, quantity } : item
       )
     );
-  };
-
-  const handleRemoveFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== productId));
   };
 
   const handleUpdateCartNote = (productId: string, note: string) => {
@@ -281,9 +178,10 @@ export default function App() {
     setIsCheckoutOpen(true);
   };
 
-  const handlePlaceOrder = (newOrder: Order) => {
-    setOrders((prev) => [newOrder, ...prev]);
+  const handlePlaceOrder = async (_newOrder?: Order) => {
     setCart([]);
+    await reloadOrders();
+    await reloadProducts();
   };
 
   const handleAddReview = (productId: string, newReview: Omit<Review, 'id' | 'date'>) => {
@@ -311,7 +209,6 @@ export default function App() {
     );
   };
 
-  // Saved/Wishlist toggle
   const handleToggleSaved = (productId: string) => {
     setSavedProductIds((prev) =>
       prev.includes(productId)
@@ -320,10 +217,7 @@ export default function App() {
     );
   };
 
-  // Seller Actions
-  
-
-    const handleAddProduct = async (newProduct: Product) => {
+  const handleAddProduct = async (newProduct: Product) => {
     const saved = await insertProduct(newProduct);
     if (saved) await reloadProducts();
   };
@@ -336,37 +230,27 @@ export default function App() {
     if (await deleteProductRow(productId)) await reloadProducts();
   };
 
-  const handleToggleStock = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId
-          ? { ...p, inStock: !p.inStock, stockQuantity: p.inStock ? 0 : 5 }
-          : p
-      )
-    );
+  const handleToggleStock = async (productId: string) => {
+    const p = products.find((x) => x.id === productId);
+    if (!p) return;
+    const ok = await updateProductRow({
+      ...p,
+      inStock: !p.inStock,
+      stockQuantity: p.inStock ? 0 : 5,
+    });
+    if (ok) await reloadProducts();
   };
 
-  const handleUpdateOrderStatus = (
+  const handleUpdateOrderStatus = async (
     orderId: string,
     status: OrderStatus,
-    trackingNumber?: string
+    trackingNumber?: string,
+    courier?: string
   ) => {
-    setOrders((prev) =>
-      prev.map((ord) => {
-        if (ord.id === orderId) {
-          return {
-            ...ord,
-            status,
-            trackingNumber: trackingNumber || ord.trackingNumber,
-            escrowReleaseDate:
-              status === 'Payment Released'
-                ? new Date().toISOString().split('T')[0] + ' (Released to Artisan)'
-                : ord.escrowReleaseDate,
-          };
-        }
-        return ord;
-      })
-    );
+    if (status !== 'Shipped') return;
+    const res = await shipOrderApi(orderId, courier || 'TCS Express', trackingNumber || '');
+    if (!res.ok) alert('Could not ship: ' + res.error);
+    await reloadOrders();
   };
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -375,24 +259,15 @@ export default function App() {
     return (
       <AuthScreen
         onAuthSuccess={handleAuthSuccess}
-        existingAccounts={accounts}
+        existingAccounts={[]}
       />
     );
   }
 
   return (
     <div className="min-h-screen bg-[#FFF9F5] text-[#4A3F35] flex flex-col font-sans selection:bg-[#D4AF37] selection:text-white">
-      {/* 0. ADMIN PANEL PORTAL */}
-      {showAdminPanel ? (
-        <AdminPanel
-          accounts={accounts}
-          sellers={sellers}
-          onUpdateAccountStatus={handleUpdateAccountStatus}
-          onClose={() => setShowAdminPanel(false)}
-        />
-      ) : currentUser.role === 'seller' ? (
+      {currentUser.role === 'seller' ? (
         <div className="flex-1 flex flex-col min-h-screen bg-[#FAF6F2]">
-          {/* Dedicated Seller Center Header */}
           <header className="sticky top-0 z-40 bg-[#4A3F35] text-white border-b border-[#D4AF37]/30 shadow-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -414,10 +289,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Logged in Studio info + Admin Portal + Exit / Logout button */}
               <div className="flex items-center gap-3">
-               
-
                 <div className="flex items-center gap-2.5 px-3 py-1 bg-white/10 rounded-xl border border-white/15">
                   <img
                     src={currentSeller.avatar}
@@ -447,7 +319,6 @@ export default function App() {
             </div>
           </header>
 
-          {/* Seller Dashboard Shell */}
           <main className="flex-1">
             <SellerDashboardShell
               seller={currentSeller}
@@ -461,7 +332,6 @@ export default function App() {
             />
           </main>
 
-          {/* Dedicated Seller Footer */}
           <footer className="bg-[#382F27] text-[#A69689] border-t border-white/10 py-4 px-6 text-center text-xs flex flex-col sm:flex-row items-center justify-between gap-2 max-w-7xl mx-auto w-full">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
@@ -476,9 +346,7 @@ export default function App() {
           </footer>
         </div>
       ) : (
-        /* 2. MAIN BUYER APP (EXCLUSIVELY SHOPPING EXPERIENCE FOR BUYER ACCOUNT / GUEST) */
         <>
-          {/* Top Navbar */}
           <Navbar
             cartCount={totalCartCount}
             onOpenCart={() => setIsCartOpen(true)}
@@ -489,22 +357,26 @@ export default function App() {
             currentUser={currentUser}
             onOpenAuthModal={(mode) => handleOpenAuth(mode, 'buyer')}
             onLogout={handleLogout}
-        
           />
 
-          {/* Buyer Logged In Welcome Greeting Bar */}
-          {currentUser && (
-            <div className="bg-[#FFF9F5] border-b border-[#D4AF37]/30 py-2.5 px-4 text-xs font-medium text-[#4A3F35] shadow-2xs">
-              <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <span>
-                    Welcome, <strong className="text-[#D4AF37] text-sm font-bold font-serif">{currentUser.name}</strong>! You are logged in with Escrow Protection.
-                  </span>
-                </div>
+          <div className="bg-[#FFF9F5] border-b border-[#D4AF37]/30 py-2.5 px-4 text-xs font-medium text-[#4A3F35] shadow-2xs">
+            <div className="max-w-7xl mx-auto flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span>
+                  Welcome, <strong className="text-[#D4AF37] text-sm font-bold font-serif">{currentUser.name}</strong>! You are logged in with Escrow Protection.
+                </span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => setIsMyOrdersOpen(true)}
+                  className="text-xs font-bold text-[#4A3F35] bg-[#D4AF37]/20 border border-[#D4AF37]/40 px-3 py-1 rounded-full"
+                >
+                  Meri Orders ({orders.length})
+                </button>
                 <button
                   onClick={handleLogout}
-                  className="text-xs font-bold text-[#8C7B6C] hover:text-rose-700 underline flex items-center gap-1 shrink-0"
+                  className="text-xs font-bold text-[#8C7B6C] hover:text-rose-700 underline flex items-center gap-1"
                   title="Sign Out"
                 >
                   <LogOut className="w-3.5 h-3.5" />
@@ -512,17 +384,15 @@ export default function App() {
                 </button>
               </div>
             </div>
-          )}
+          </div>
 
           <main className="flex-1">
-            {/* Category Navigation Pills */}
             <HeaderPills
               selectedCategory={selectedCategory}
               onSelectCategory={setSelectedCategory}
               categoryCounts={categoryCounts}
             />
 
-            {/* Hero Banner */}
             <HeroBanner
               onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
               onExploreClick={() => {
@@ -531,17 +401,17 @@ export default function App() {
               }}
             />
 
-            {/* Homepreneurs of the Week */}
-            <FeaturedHomepreneurs
-              sellers={sellers}
-              onSelectSeller={(seller) => {
-                setSearchQuery(seller.shopName);
-                const feedEl = document.getElementById('product-feed');
-                if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth' });
-              }}
-            />
+            {sellers.length > 0 && (
+              <FeaturedHomepreneurs
+                sellers={sellers}
+                onSelectSeller={(seller) => {
+                  setSearchQuery(seller.shopName || seller.homeBusinessName);
+                  const feedEl = document.getElementById('product-feed');
+                  if (feedEl) feedEl.scrollIntoView({ behavior: 'smooth' });
+                }}
+              />
+            )}
 
-            {/* Product Feed Grid */}
             <ProductFeed
               products={products}
               selectedCategory={selectedCategory}
@@ -554,25 +424,19 @@ export default function App() {
             />
           </main>
 
-          {/* Buyer Footer */}
-          <Footer
-            onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
-          />
+          <Footer onOpenEscrowModal={() => setIsEscrowModalOpen(true)} />
         </>
       )}
 
-      {/* MODALS */}
-      {/* Auth Modal (Login/Signup with Role selection) */}
       <AuthModal
         isOpen={authModalConfig.isOpen}
         onClose={() => setAuthModalConfig((prev) => ({ ...prev, isOpen: false }))}
         initialMode={authModalConfig.mode}
         initialRole={authModalConfig.role}
         onAuthSuccess={handleAuthSuccess}
-        existingAccounts={accounts}
+        existingAccounts={[]}
       />
 
-      {/* Product Detail Modal */}
       <ProductDetailModal
         product={activeProduct}
         onClose={() => setActiveProduct(null)}
@@ -585,13 +449,11 @@ export default function App() {
         onOpenEscrowModal={() => setIsEscrowModalOpen(true)}
       />
 
-      {/* Escrow Explanation Modal */}
       <EscrowModal
         isOpen={isEscrowModalOpen}
         onClose={() => setIsEscrowModalOpen(false)}
       />
 
-      {/* Shopping Cart Drawer */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -602,7 +464,6 @@ export default function App() {
         onProceedToCheckout={() => setIsCheckoutOpen(true)}
       />
 
-      {/* Safe Escrow Checkout Modal */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
@@ -610,7 +471,13 @@ export default function App() {
         onPlaceOrder={handlePlaceOrder}
       />
 
-      {/* Direct Artisan Chat Modal */}
+      <MyOrders
+        isOpen={isMyOrdersOpen}
+        onClose={() => setIsMyOrdersOpen(false)}
+        orders={orders}
+        onChanged={reloadOrders}
+      />
+
       {activeChatSeller && (
         <ArtisanChatModal
           isOpen={Boolean(activeChatSeller)}
@@ -622,4 +489,3 @@ export default function App() {
     </div>
   );
 }
-
