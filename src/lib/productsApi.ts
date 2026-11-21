@@ -66,6 +66,7 @@ export async function fetchAllProducts(): Promise<Product[]> {
 
 export async function insertProduct(p: Product): Promise<Product | null> {
   if (!supabase) return null;
+    const uploadedImages = await uploadProductImages(p.sellerId, p.images);
   const { data, error } = await supabase
     .from('products')
     .insert({
@@ -74,7 +75,7 @@ export async function insertProduct(p: Product): Promise<Product | null> {
       category: p.category,
       price: p.price,
       original_price: p.originalPrice ?? null,
-      images: p.images,
+      images: uploadedImages,
       video_url: p.videoUrl ?? null,
       description: p.description,
       materials: p.materials ?? null,
@@ -93,6 +94,7 @@ export async function insertProduct(p: Product): Promise<Product | null> {
 
 export async function updateProductRow(p: Product): Promise<boolean> {
   if (!supabase) return false;
+    const uploadedImages = await uploadProductImages(p.sellerId, p.images);
   const { error } = await supabase
     .from('products')
     .update({
@@ -100,7 +102,7 @@ export async function updateProductRow(p: Product): Promise<boolean> {
       category: p.category,
       price: p.price,
       original_price: p.originalPrice ?? null,
-      images: p.images,
+      images: uploadedImages,
       video_url: p.videoUrl ?? null,
       description: p.description,
       materials: p.materials ?? null,
@@ -118,4 +120,33 @@ export async function deleteProductRow(id: string): Promise<boolean> {
   const { error } = await supabase.from('products').delete().eq('id', id);
   if (error) alert('Delete failed: ' + error.message);
   return !error;
+}
+
+// base64 photos ko Storage mein bhejta hai, aur public links wapas deta hai
+export async function uploadProductImages(
+  sellerId: string,
+  images: string[]
+): Promise<string[]> {
+  if (!supabase) return images;
+  const urls: string[] = [];
+  for (const img of images) {
+    // pehle se link hai (edit ke waqt), to waise hi rakho
+    if (!img.startsWith('data:')) {
+      urls.push(img);
+      continue;
+    }
+    const blob = await (await fetch(img)).blob();
+    const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const path = `${sellerId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage
+      .from('product-images')
+      .upload(path, blob, { contentType: blob.type });
+    if (error) {
+      alert('Photo upload failed: ' + error.message);
+      continue;
+    }
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path);
+    urls.push(data.publicUrl);
+  }
+  return urls;
 }
