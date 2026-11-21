@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-
+import { fetchAllProducts, insertProduct, updateProductRow, deleteProductRow } from './lib/productsApi';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Category, Product, Seller, Order, CartItem, Review, OrderStatus, UserAccount, UserRole, VerificationStatus } from './types';
 import { mockProducts, mockSellers, mockOrders } from './data/mockData';
@@ -72,14 +72,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Products State with localStorage persistence
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const saved = localStorage.getItem('ghar_se_ghar_tak_products');
-      return saved ? JSON.parse(saved) : mockProducts;
-    } catch (e) {
-      return mockProducts;
-    }
-  });
+    const [products, setProducts] = useState<Product[]>([]);
+
+  const reloadProducts = async () => {
+    setProducts(await fetchAllProducts());
+  };
+
+  useEffect(() => {
+    reloadProducts();
+  }, [currentUser]);
 
   const [sellers] = useState<Seller[]>(mockSellers);
   const [orders, setOrders] = useState<Order[]>(mockOrders);
@@ -320,18 +321,19 @@ export default function App() {
   };
 
   // Seller Actions
-  const handleAddProduct = (newProduct: Product) => {
-    setProducts((prev) => [newProduct, ...prev]);
+  
+
+    const handleAddProduct = async (newProduct: Product) => {
+    const saved = await insertProduct(newProduct);
+    if (saved) await reloadProducts();
   };
 
-  const handleUpdateProduct = (updatedProduct: Product) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
-    );
+  const handleUpdateProduct = async (updatedProduct: Product) => {
+    if (await updateProductRow(updatedProduct)) await reloadProducts();
   };
 
-  const handleDeleteProduct = (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
+  const handleDeleteProduct = async (productId: string) => {
+    if (await deleteProductRow(productId)) await reloadProducts();
   };
 
   const handleToggleStock = (productId: string) => {
